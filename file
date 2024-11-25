@@ -1,0 +1,134 @@
+# Here’s a simple FastAPI application with SQLite for user authentication, including endpoints for signing in, signing up, resetting (forgetting) passwords, and logging out.
+
+# ### Setup
+
+# First, install the necessary libraries:
+
+# ```bash
+# pip install fastapi uvicorn  passlib
+# pip install python-multipart
+# ```
+
+# Now, create the following code structure:
+
+# 1. **`app.py`**: Main FastAPI application file
+# 2. **`auth.py`**: Contains the authentication logic (e.g., hashing passwords, token management)
+# 3. **Database setup**: Using SQLite directly in `app.py` for simplicity.
+
+# ### Code Structure
+
+# #### `auth.py`
+
+# We’ll handle password hashing and verification using `passlib`. Install `passlib` if you haven’t already.
+
+# ```python
+# # auth.py
+
+# from passlib.context import CryptContext
+
+# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# def hash_password(password: str) -> str:
+#     return pwd_context.hash(password)
+
+# def verify_password(password: str, hashed_password: str) -> bool:
+#     return pwd_context.verify(password, hashed_password)
+# ```
+
+# #### `app.py`
+
+# Now we set up the main application.
+
+# ```python
+# from fastapi import FastAPI, Depends, HTTPException, status
+# from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+# from pydantic import BaseModel
+# from typing import Optional
+# import sqlite3
+# import auth
+
+# app = FastAPI()
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# # Database initialization
+# def get_db():
+#     conn = sqlite3.connect("users.db")
+#     conn.execute("""CREATE TABLE IF NOT EXISTS users (
+#                     id INTEGER PRIMARY KEY,
+#                     username TEXT UNIQUE,
+#                     hashed_password TEXT
+#                 )""")
+#     return conn
+
+# # Pydantic models
+# class User(BaseModel):
+#     username: str
+#     password: str
+
+# class UserInDB(User):
+#     hashed_password: str
+
+# class ResetPassword(BaseModel):
+#     username: str
+#     new_password: str
+
+# # Helper functions
+# def create_user(username: str, password: str):
+#     db = get_db()
+#     hashed_password = auth.hash_password(password)
+#     try:
+#         db.execute("INSERT INTO users (username, hashed_password) VALUES (?, ?)", (username, hashed_password))
+#         db.commit()
+#     except sqlite3.IntegrityError:
+#         raise HTTPException(status_code=400, detail="Username already exists")
+
+# def authenticate_user(username: str, password: str) -> Optional[UserInDB]:
+#     db = get_db()
+#     cursor = db.execute("SELECT * FROM users WHERE username = ?", (username,))
+#     user = cursor.fetchone()
+#     if user and auth.verify_password(password, user[2]):
+#         return UserInDB(username=user[1], hashed_password=user[2])
+#     return None
+
+# # Routes
+# @app.post("/signup")
+# def signup(user: User):
+#     create_user(user.username, user.password)
+#     return {"message": "User created successfully"}
+
+# @app.post("/signin")
+# def signin(form_data: OAuth2PasswordRequestForm = Depends()):
+#     user = authenticate_user(form_data.username, form_data.password)
+#     if not user:
+#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+#     # Here you would generate a token and return it; simplified here
+#     return {"message": "Login successful", "token": "dummy_token"}
+
+# @app.post("/reset-password")
+# def reset_password(reset_data: ResetPassword):
+#     db = get_db()
+#     hashed_password = auth.hash_password(reset_data.new_password)
+#     db.execute("UPDATE users SET hashed_password = ? WHERE username = ?", (hashed_password, reset_data.username))
+#     db.commit()
+#     return {"message": "Password reset successful"}
+
+# @app.post("/logout")
+# def logout(token: str = Depends(oauth2_scheme)):
+#     # Token invalidation process (dummy response here)
+#     return {"message": "Logout successful"}
+# ```
+
+# ### Running the Application
+
+# Run the FastAPI app with Uvicorn:
+
+# ```bash
+# uvicorn app:app --reload
+# ```
+
+# ### Explanation
+
+# 1. **`/signup`**: Registers a new user by storing the hashed password in SQLite.
+# 2. **`/signin`**: Authenticates the user with a password, returning a dummy token.
+# 3. **`/reset-password`**: Updates the user’s password with a new hashed password.
+# 4. **`/logout`**: Placeholder endpoint for logging out (token invalidation could be added).
